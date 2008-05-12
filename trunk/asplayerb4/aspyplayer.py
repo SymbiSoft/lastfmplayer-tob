@@ -31,6 +31,7 @@ import sys
 import graphics
 import traceback
 import thread
+from dialog import Wait
 from mutagen.easyid3 import EasyID3
 from mutagen.mp4 import MP4
 
@@ -678,7 +679,7 @@ class MusicRepository(object):
 
 		return len(new_musics)
 
-	def update_library(self, musics_path, showMessage):
+	def update_library(self, musics_path, showWait):
 		all_music_in_db_path = self.find_all_musics_path()
 		
 		to_be_added = [x for x in musics_path if x not in all_music_in_db_path]
@@ -692,9 +693,10 @@ class MusicRepository(object):
 				new_musics.append(music)
 				add_counter += 1
 				if (add_counter % 2) == 0:
-					showMessage("Library updating... Added: %i, Deleted: 0" % add_counter)
+					#FIXME: Notes are to slow for this purpose try using Popup_Info
+					showWait(u"Library updating... Added: %i, Deleted: 0" % add_counter)
 				else:
-					showMessage("Library updating Added: %i, Deleted: 0" % add_counter)
+					showWait(u"Library updating Added: %i, Deleted: 0" % add_counter)
 				
 			except:
 				self.__logger.debug("Adding file to library error: '%s'" % \
@@ -710,9 +712,6 @@ class MusicRepository(object):
 			
 
 		return (len(new_musics), len(to_be_deleted))
-	
-	def update_library_async(self,musics_path,showMessage):
-		thread.start_new_thread(self.update_library,(musics_path,showMessage))
 	
 
 
@@ -1377,8 +1376,10 @@ class Window(object):
 		self.body = None
 		self.menu = []
 		self.as_presenter = None
+		self.wait = None
 		appuifw.app.screen = "normal"
-
+		
+		
 	def static_show_message(message):
 		appuifw.note(unicode(message), "info")
 		
@@ -1392,6 +1393,12 @@ class Window(object):
 
 	def show_error_message(self, message):
 		appuifw.note(unicode(message), "error")
+		
+	def show_wait(self,message):
+		if self.wait == None:
+			self.wait = Wait(u"Test")
+		self.wait.set_label((message))
+		self.wait.show()
 
 	def ask_text(self, info):
 		return appuifw.query(unicode(info), "text")
@@ -1465,16 +1472,16 @@ class MainWindow(Window):
 		return items
 	
 	def update_music_library(self):
-		self.show_message("Library updated. Added: 0, Deleted: 0")
-		result = self.__music_repository.update_library(self.get_all_music_files_path(), self.show_message)
+		self.show_wait(u"Library updated. Added: 0, Deleted: 0")
+		result = self.__music_repository.update_library(self.get_all_music_files_path(), self.show_wait)
 		self.body.set_list(self.get_list_items())
-		self.show_message("Library updated. Added: %i, Deleted: %i" % result)
+		self.show_wait(u"Library updated. Added: %i, Deleted: %i" % result)
 	
 	def rebuild_music_library(self):
-		self.show_message("This operation can take some time...")
+		self.show_wait(u"This operation can take some time...")
 		result = self.__music_repository.rebuild_library(self.get_all_music_files_path())
 		self.body.set_list(self.get_list_items())
-		self.show_message("Library rebuilt. Added: %i" % result)
+		self.show_wait(u"Library rebuilt. Added: %i" % result)
 
 	def get_all_music_files_path(self):
 		return self.__fs_services.get_all_music_files_path_in_device()
