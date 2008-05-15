@@ -661,15 +661,20 @@ class MusicRepository(object):
 		result = self.__db_helper.execute_nonquery(cmd)
 		assert result > 0
 
-	def rebuild_library(self, musics_path):
+	def rebuild_library(self, musics_path,update):
 		cmd = "DELETE FROM Music"
 		result = self.__db_helper.execute_nonquery(cmd)
 
 		new_musics = []
+		self.add_counter = 0
+		self.delete_counter = 0
 		for file in musics_path:
 			try:
 				music = Music(file)
 				new_musics.append(music)
+				self.add_counter += 1
+				update(self.add_counter,self.delete_counter)
+				e32.ao_yield()
 			except:
 				self.__logger.debug("Adding file to library error: '%s'" % \
 					''.join(traceback.format_exception(*sys.exc_info())))
@@ -679,25 +684,21 @@ class MusicRepository(object):
 
 		return len(new_musics)
 
-	def update_library(self, musics_path, showWait):
+	def update_library(self, musics_path, update):
 		all_music_in_db_path = self.find_all_musics_path()
 		
 		to_be_added = [x for x in musics_path if x not in all_music_in_db_path]
 		to_be_deleted = [x for x in all_music_in_db_path if x not in musics_path]
 		new_musics = []
-		add_counter = 0
-		delete_counter = 0
+		self.add_counter = 0
+		self.delete_counter = 0
 		for file in to_be_added:
 			try:
 				music = Music(file)
 				new_musics.append(music)
-				add_counter += 1
-				if (add_counter % 2) == 0:
-					#FIXME: Notes are to slow for this purpose try using Popup_Info
-					showWait(u"Library updating... Added: %i, Deleted: 0" % add_counter)
-				else:
-					showWait(u"Library updating Added: %i, Deleted: 0" % add_counter)
-				
+				self.add_counter += 1
+				update(self.add_counter,self.delete_counter)
+				e32.ao_yield()
 			except:
 				self.__logger.debug("Adding file to library error: '%s'" % \
 					''.join(traceback.format_exception(*sys.exc_info())))
@@ -707,8 +708,9 @@ class MusicRepository(object):
 	
 		for music_path in to_be_deleted:
 			self.delete(music_path)
-			delete_counter += 1 
-			showMessage("Library updating. Added: %i, Deleted: %i" % add_counter, delete_counter)
+			self.delete_counter += 1 
+			update(self.add_counter,self.delete_counter)
+			#showMessage("Library updating. Added: %i, Deleted: %i" % add_counter, delete_counter)
 			
 
 		return (len(new_musics), len(to_be_deleted))
@@ -1468,20 +1470,23 @@ class MainWindow(Window):
 	def get_list_items(self):
 		items = [(u"Musics", unicode("%i musics" % self.__music_repository.count_all())),
 				(u"About", u"aspyplayer.googlecode.com")]
-		
+		return items
+	
+	def get_list_items_on_update(self,added,deleted):
+		items = [(u"Library updated",u""),(u"Added:",unicode("%i" % added)),(u"Deleted:",unicode("%i" % deleted))]
 		return items
 	
 	def update_music_library(self):
-		self.show_wait(u"Library updated. Added: 0, Deleted: 0")
-		result = self.__music_repository.update_library(self.get_all_music_files_path(), self.show_wait)
+		#self.show_wait(u"Library updated. Added: 0, Deleted: 0")
+		result = self.__music_repository.update_library(self.get_all_music_files_path(),self.on_update)
 		self.body.set_list(self.get_list_items())
-		self.show_wait(u"Library updated. Added: %i, Deleted: %i" % result)
+		#self.show_wait(u"Library updated. Added: %i, Deleted: %i" % result)
 	
 	def rebuild_music_library(self):
-		self.show_wait(u"This operation can take some time...")
-		result = self.__music_repository.rebuild_library(self.get_all_music_files_path())
+		#self.show_wait(u"This operation can take some time...")
+		result = self.__music_repository.rebuild_library(self.get_all_music_files_path(),self.on_update)
 		self.body.set_list(self.get_list_items())
-		self.show_wait(u"Library rebuilt. Added: %i" % result)
+		#self.show_wait(u"Library rebuilt. Added: %i" % result)
 
 	def get_all_music_files_path(self):
 		return self.__fs_services.get_all_music_files_path_in_device()
@@ -1501,7 +1506,14 @@ class MainWindow(Window):
 	def show(self):
 		self.update_menu(self.get_menu_items())
 		self.set_right_key_handler(self.quit)
-
+	
+	def update_listbox(self,listbox,items):
+		listbox.set_list(items)
+		self.body = listbox
+	
+	def on_update(self,added,deleted):
+		self.update_listbox(self.body,self.get_list_items_on_update(added,deleted))
+		
 
 class SelectWindow(Window):
 	def __init__(self, quit_handler, navigator, service_locator):
